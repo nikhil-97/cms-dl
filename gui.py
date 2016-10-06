@@ -6,9 +6,10 @@ from datetime import datetime
 import pickle as pckl
 import cms_login as cms
 import os
+import csv
 
 class Gui:
-	data_file='CMS_username.dat'
+	data_file='CMS_username.csv'
 	directory=None
 	def doNothing(self):
 		pass
@@ -64,18 +65,20 @@ class Gui:
 		self.click_count=IntVar(root)
 		if self.remember.get():
 			if len(save_username)>=1 and len(save_pwd)>=1:
-				userdata = {str(save_username):(str(save_pwd),str(Gui.directory))}
-				with open('CMS_username.dat', 'wb') as handle:
-					pckl.dump(userdata, handle, protocol=pckl.HIGHEST_PROTOCOL)
+				userdata = (str(save_username),str(save_pwd),str(Gui.directory))
+				with open('CMS_username.csv', 'w') as userfile:
+					userwriter=csv.writer(userfile)
+					userwriter.writerow(userdata)
 				tkMessageBox.showinfo(title="Updated",message="Your login details have been updated with username %s"%(save_username))
 			else:
 				tkMessageBox.showerror("Error","You can't have an empty username/password -_- ")
 
 	def load_details(self,details_file):
 		if os.path.isfile(details_file) and os.stat(details_file).st_size != 0:
-			with open(details_file, 'rb') as chandler:
-					datafile=pckl.load(chandler)
-			print "datafile=",datafile
+			with open(details_file, 'r') as reader:
+					csvreader = csv.reader(reader)
+					datafile = list(csvreader)
+			# print "datafile=",datafile
 			return datafile
 			#userdata = datafile.read()
 			#user, pwd = map(str, userdata.split(','))
@@ -86,42 +89,67 @@ class Gui:
 		# Include option to overwrite,login as different user.
 		# May have to change data storage type to recognise different users.
 		# return (user, pwd)
-
+	def show_report(self,list):
+		self.report=Toplevel(root)
+		self.report.title("Report")
+		self.report.minsize(width=600,height=500)
+		self.report_tree=ttk.Treeview(self.report,show='headings')
+		self.report_tree["columns"]=("Course", "Activity")
+		self.report_tree.column("Course", minwidth=350, stretch=True)
+		self.report_tree.column("Activity", minwidth=50, stretch=True)
+		self.report_tree.heading("Course", text="Course")
+		self.report_tree.heading("Activity", text="Activity")
+		for i in list:
+			self.report_tree.insert('', 'end',values=(i[1], i[2]))
+		self.report_tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20))
 	def run_app(self):
-
+		self.progress.start(interval=50)
 		if(not cms.init()):
+
 			tkMessageBox.showerror("Connection Error", "Unable to connect to CMS now. Please try again later.")
-			self.status.config(bg="red",text="Cannot connect to CMS")
+			#self.status.config(bg="red",text="Cannot connect to CMS")
 			return False
 		#global data_file
+		self.progress.step()
+		self.progress.update_idletasks()
 		user_details=self.load_details(Gui.data_file)
-		print user_details
-
-		website=cms.submit_form(user_details)
-		cms.main_job(website)
-
+		# print user_details
+		if(user_details != None):
+			website=cms.submit_form(user_details)
+			self.progress.step()
+			self.progress.update_idletasks()
+			if(website==False):
+				tkMessageBox.showerror("User details Error", "Looks like there is an error in your user details. Please check them again")
+			else:
+				self.progress.step()
+				self.progress.update_idletasks()
+				activity=cms.main_job(website)
+				if activity:
+					self.progress.stop()
+					self.show_report(activity)
 	def show_last(self):
 		lastscan=Toplevel(root)
+		lastscan.minsize(width=900,height=500)
 		lastscan.title("Last Scan Results")
 		#lastscan.config(bg="white", bd=2)
-		self.scantree=ttk.Treeview(lastscan)
+		self.scantree=ttk.Treeview(lastscan,displaycolumns='#all')
 		self.scantree['show']='headings'
 		self.scantree["columns"]=("Timestamp", "Course", "Activity")
-		self.scantree.column("Timestamp", width=100, stretch=True)
-		self.scantree.column("Course", width=100, stretch=True)
-		self.scantree.column("Activity", width=100, stretch=True)
+		self.scantree.column("Timestamp", minwidth=350, stretch=True)
+		self.scantree.column("Course", minwidth=350, stretch=True)
+		self.scantree.column("Activity", width=50, stretch=True)
 		self.scantree.heading("Timestamp", text="Timestamp")
 		self.scantree.heading("Course", text="Course")
 		self.scantree.heading("Activity", text="Activity")
 
-		if os.path.isfile('Lastactivity.dat') and os.stat('Lastactivity.dat').st_size!=0:
-			with open('Lastactivity.dat', 'rb') as chandler:
-					print repr(chandler.read())
-					activitydata=pckl.load(chandler)
-					print activitydata
+		if os.path.isfile('Lastactivity.csv') and os.stat('Lastactivity.csv').st_size!=0:
+			with open('Lastactivity.csv', 'r') as chandler:
+					activityreader = csv.reader(chandler)
+					activitydata = list(activityreader)
+					# print activitydata,type(activitydata)
 					for i in activitydata:
-						print i
-						self.scantree.insert('', 0, 'gallery',
+						# print i
+						self.scantree.insert('', 0,
 								 values=(i[0],i[1], i[2]))
 		self.scantree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20))
 
@@ -135,7 +163,7 @@ class Gui:
 		settingsmenu.add_cascade(label="Settings", menu=submenu)
 		# submenu.add_command(label="Run Now", command=self.run_app)
 		submenu.add_command(label="Change user details", command=self.askuser)
-		submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.askuser)
+		#submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.askuser)
 		submenu.add_command(label="Change downloads directory", command=self.askdir)
 
 		submenu.add_separator()
@@ -166,11 +194,14 @@ class Gui:
 
 		self.runbutton=Button(master, text="Run Now", font="serif 20",bg="green",fg="black", relief=RAISED,command=self.run_app)
 		self.lastbutton=Button(master, text="Show last scan results", font="serif 12", relief=RAISED,command=self.show_last)
-		self.status=Label(master,  text="Status Bar", bd=2,bg="white", relief=SUNKEN, anchor=E, font="serif 10")
+		self.progress = ttk.Progressbar(master, mode='indeterminate', name='run Progress')
+		#self.status=Label(master,  text="Status Bar", bd=2,bg="white", relief=SUNKEN, anchor=E, font="serif 10")
 
 		self.runbutton.pack(anchor=NW, expand=True, padx=20, pady=(10, 10), ipadx=1, ipady=1)
+
 		self.lastbutton.pack(anchor=W,expand=True,padx=20,pady=10,ipadx=1,ipady=1,side=TOP)
-		self.status.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
+		self.progress.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
+		#self.status.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
 		self.tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20), anchor=SW, side=BOTTOM)
 
 
