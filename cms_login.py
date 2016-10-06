@@ -6,17 +6,17 @@
 
 import cookielib
 import os
-from sys import exit
+from sys import exit,setrecursionlimit
 
 import mechanize
 from bs4 import BeautifulSoup
 
 from site_test import site_check
-
-# import pickle
+import pickle
+import time as tm
 
 br=None
-
+setrecursionlimit(50000)
 
 def init():
 	global br
@@ -43,12 +43,14 @@ def submit_form(details):
 	username=details.keys()[0]
 	br.form['username'], br.form['password'] = username,details[username][0]
 	response = br.submit()
+	tm.sleep(1)
 	site = response.read()
 	#
 	if br.geturl() != 'http://id.bits-hyderabad.ac.in/moodle/my/':
 		print 'There was an error with login. Check your login details again.'
 		exit()
 	return site
+
 
 
 def main_job(site):
@@ -64,7 +66,8 @@ def main_job(site):
 	# Todo : Store the list of all enrolled courses along with userdata.
 	# Check if user has not enrolled in any new course.
 	# If not, then jump directly to checking,instead of getting each box every time.
-
+	activity_list=[]
+	activity_indicator=None
 	for coursebox in course_boxes:
 		course_links = coursebox.find_all('a')
 		# Link to the course page is found.
@@ -81,7 +84,9 @@ def main_job(site):
 			time = course_activity.find('div', attrs={'class': 'activityhead'})
 			timestamp = time.string
 
+
 			if course_activity.p.string == 'No recent activity':
+				activity_indicator="No activity"
 				print 'No recent %s here :) \n' % (timestamp[:1].lower() + timestamp[1:])
 			# timestamp is stored as 'Activity since '
 			else:
@@ -93,6 +98,7 @@ def main_job(site):
 						continue
 					dwldfile = new_file.a.get('href')
 					print file_name
+
 					br.open(dwldfile)
 					# In most cases,this directs to a document file.Tested on .pdf,.docx ,the most common formats.
 					document = br.geturl()
@@ -100,6 +106,7 @@ def main_job(site):
 
 					dwl_path = 'C:\\Users\\Nikhilanj\\Desktop\\'
 					save_filename = file_name + '.' + document.split('.')[-1]
+					activity_indicator='Downloaded file %s'%save_filename,
 
 					try:
 						if os.path.isfile(dwl_path + save_filename) and os.stat(dwl_path + save_filename).st_size != 0:
@@ -107,7 +114,8 @@ def main_job(site):
 						else:
 							br.retrieve(document, dwl_path + save_filename)
 							# This downloads the file to dwl_path.
-							print '%s saved to ' %save_filename
+							print '%s saved' %save_filename
+							tm.sleep(3)
 
 					except:
 						if ('forum' in document):
@@ -124,7 +132,7 @@ def main_job(site):
 									print 'There was an error reading the forum post. Please check manually at '+ref+' .Sorry :( '
 									post_read_error_flag = 0
 
-								save_post_with_name = fil_name+'.txt'
+								save_post_with_name = file_name+'.txt'
 
 								if (os.path.isfile(dwl_path+save_post_with_name) and os.stat(
 											dwl_path + save_filename).st_size != 0 and post_read_error_flag):
@@ -132,8 +140,9 @@ def main_job(site):
 								else:
 									if (post_read_error_flag):
 										with open(dwl_path+save_post_with_name, 'w') as g:
-											g.write(thing_to_write)
-											print 'Forum post written to %s at %s' % (save_post_with_name, dwl_path)
+											g.write(text_to_write)
+											#print 'Forum post written to %s at %s' % (save_post_with_name, dwl_path)
+											activity_indicator='Forum post written to %s at %s' % (save_post_with_name, dwl_path),
 							except:
 								print 'There was an error reading the post'
 
@@ -143,6 +152,13 @@ def main_job(site):
 						# Downloading folders is not supported yet.
 						# The 'download folder' button is a submit only form(SubmitControl).
 						# Unable to submit it for some reason.
+		activity_list.append((str(timestamp).strip('\n'),str(course_name).strip('\n'),str(activity_indicator).strip('\n')))
+		print activity_list
+		print str(course_name)
+		print str(activity_indicator)
+		tm.sleep(1)
+	with open('Lastactivity.dat', 'wb') as writefile:
+		pickle.dump(activity_list, writefile, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__=='__main__':
 	init()
