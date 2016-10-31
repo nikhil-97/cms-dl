@@ -3,7 +3,6 @@ import ttk
 import tkFileDialog
 import tkMessageBox
 from datetime import datetime
-import pickle as pckl
 import cms_login as cms
 import os
 import csv
@@ -11,6 +10,10 @@ import csv
 class Gui:
 	data_file='CMS_username.csv'
 	directory=None
+
+
+	#status_text.set(cms.status)
+
 	def doNothing(self):
 		pass
 
@@ -102,31 +105,41 @@ class Gui:
 		for i in list:
 			self.report_tree.insert('', 'end',values=(i[1], i[2]))
 		self.report_tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20))
-	def run_app(self):
-		self.progress.start(interval=50)
-		if(not cms.init()):
 
+	def check_news(self):
+		if (not cms.init()):
 			tkMessageBox.showerror("Connection Error", "Unable to connect to CMS now. Please try again later.")
-			#self.status.config(bg="red",text="Cannot connect to CMS")
+			# self.status.config(bg="red",text="Cannot connect to CMS")
 			return False
-		#global data_file
-		self.progress.step()
-		self.progress.update_idletasks()
-		user_details=self.load_details(Gui.data_file)
+		cms.check_site_news()
+
+	def login_to_cms(self):
+		if (not cms.init()):
+			tkMessageBox.showerror("Connection Error", "Unable to connect to CMS now. Please try again later.")
+			self.statusbar.config(bg="red",text="Cannot connect to CMS")
+			return False
+			# global data_file
+		self.user_details = self.load_details(Gui.data_file)
 		# print user_details
-		if(user_details != None):
-			website=cms.submit_form(user_details)
-			self.progress.step()
-			self.progress.update_idletasks()
-			if(website==False):
-				tkMessageBox.showerror("User details Error", "Looks like there is an error in your user details. Please check them again")
-			else:
-				self.progress.step()
-				self.progress.update_idletasks()
-				activity=cms.main_job(website)
-				if activity:
-					self.progress.stop()
-					self.show_report(activity)
+		if (self.user_details != None):
+			self.website = cms.submit_form(self.user_details)
+			if (self.website == False):
+				tkMessageBox.showerror("User details Error",
+									   "Looks like there is an error in your user details. Please check them again")
+				return False
+		return True
+	def check_courses(self):
+		print "Checking courses"
+		if(self.login_to_cms()):
+			user_land_soup = cms.get_init_soup(self.website)
+			print "Hello %s !" % (cms.get_name(user_land_soup))
+			self.status_text.set("Hello "+cms.get_name(user_land_soup)+" !")
+			self.statusbar.config(bg="blue",fg="white", text=cms.get_name(user_land_soup))
+			activity=cms.check_my_courses(self.website)
+			if activity:
+				print self.show_report(activity)
+				self.show_report(activity)
+
 	def show_last(self):
 		lastscan=Toplevel(root)
 		lastscan.minsize(width=900,height=500)
@@ -161,7 +174,7 @@ class Gui:
 
 		submenu = Menu(settingsmenu, tearoff=0)
 		settingsmenu.add_cascade(label="Settings", menu=submenu)
-		# submenu.add_command(label="Run Now", command=self.run_app)
+		# submenu.add_command(label="Run Now", command=self.check_courses)
 		submenu.add_command(label="Change user details", command=self.askuser)
 		#submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.askuser)
 		submenu.add_command(label="Change downloads directory", command=self.askdir)
@@ -192,16 +205,18 @@ class Gui:
 		self.tree.insert('', 0, 'gallery',
 						 values=("File1", "MATH", "C:/", datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y'), "14.3 kB"))
 
-		self.runbutton=Button(master, text="Run Now", font="serif 20",bg="green",fg="black", relief=RAISED,command=self.run_app)
+		self.runbutton=Button(master, text="Check my courses now", font="serif 18",bg="green",fg="black", relief=RAISED,command=self.check_courses)
+		self.newsbutton=Button(master,text="Check site news",font="serif 14",relief=RAISED,command=self.check_news)
 		self.lastbutton=Button(master, text="Show last scan results", font="serif 12", relief=RAISED,command=self.show_last)
-		self.progress = ttk.Progressbar(master, mode='indeterminate', name='run Progress')
-		#self.status=Label(master,  text="Status Bar", bd=2,bg="white", relief=SUNKEN, anchor=E, font="serif 10")
+		#self.progress = ttk.Progressbar(master, mode='indeterminate', name='run Progress')
+		self.status_text = StringVar()
+		self.statusbar=Label(master, bd=2,bg="white", relief=SUNKEN, anchor=W, font="serif 14",textvariable=self.status_text)
 
-		self.runbutton.pack(anchor=NW, expand=True, padx=20, pady=(10, 10), ipadx=1, ipady=1)
-
-		self.lastbutton.pack(anchor=W,expand=True,padx=20,pady=10,ipadx=1,ipady=1,side=TOP)
-		self.progress.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
-		#self.status.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
+		self.runbutton.pack(anchor=NW, expand=True, padx=20,pady=5, ipadx=1, ipady=1)
+		self.newsbutton.pack(anchor=W, expand=True, padx=20,pady=5,ipadx=1, ipady=1)
+		self.lastbutton.pack(anchor=W,expand=True,padx=20,pady=5,ipadx=1,ipady=1,side=TOP)
+		#self.progress.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
+		self.statusbar.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
 		self.tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20), anchor=SW, side=BOTTOM)
 
 

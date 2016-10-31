@@ -17,7 +17,7 @@ from site_test import site_check
 
 br = None
 setrecursionlimit(50000)
-
+status="Idle"
 
 def init():
 	global br
@@ -48,7 +48,7 @@ def submit_form(details):
 	site = response.read()
 	#
 	if br.geturl() != 'http://id.bits-hyderabad.ac.in/moodle/my/':
-		# print 'There was an error with login. Check your login details again.'
+		print 'There was an error with login. Check your login details again.'
 		# exit()
 		return False
 	return site
@@ -81,16 +81,32 @@ def write_activity_to_file(activitylist):
 		for active in activitylist:
 			writer.writerow(active)
 
-def main_job(site):
-	user_land_soup=get_init_soup(site)
-	print "Hello %s !" % (get_name(user_land_soup))
-	course_box=get_course_boxes(user_land_soup)
+def check_site_news():
+	global status
+	news_url='http://id.bits-hyderabad.ac.in/moodle/mod/forum/view.php?id=1'
+	site_news_soup=BeautifulSoup(br.open(news_url).read(),'html.parser')
+	news_box = site_news_soup.body.find('table', attrs={'class': 'forumheaderlist'})
+	status="Checking site news"
+	#print news_box
+	latest_news=[]
+	for news in news_box.findAll("tr"):
+		try:
+			news_name=news.find('td', attrs={'class': 'topic starter'})
+			print news_name.a.string
+			latest_news.append(news_name.a.string)
+		except:
+			continue
+	#print latest_news
+	return 'job done'
+
+def check_my_courses(site):
+	global status
+	course_box=get_course_boxes(get_init_soup(site))
 
 
 	# Todo : Store the list of all enrolled courses along with userdata.
 	# Check if user has not enrolled in any new course.
 	# If not, then jump directly to checking,instead of getting each box every time.
-
 	activity_list=[]
 	activity_indicator=None
 	for coursebox in course_box:
@@ -100,7 +116,8 @@ def main_job(site):
 		for course in course_links:
 			course_name = course.get('title')
 			course_site = course.get('href')
-			#print "Checking %s ......" %course_name
+			status="Checking %s ......" %course_name
+			print "Status = ",status
 			# Check the 'recent activity' block for any new files.
 			# The website gives details for the past 48 hrs,or since the last login,whichever is latest.
 			course_site_read = br.open(course_site).read()
@@ -112,7 +129,7 @@ def main_job(site):
 
 			if course_activity.p.string == 'No recent activity':
 				activity_indicator="No activity"
-				print 'No recent %s here :) \n' % (timestamp[:1].lower() + timestamp[1:])
+				# print 'No recent %s here :) \n' % (timestamp[:1].lower() + timestamp[1:])
 			# timestamp is stored as 'Activity since '
 			else:
 				new_files = course_activity.find_all("p", "activity")
@@ -172,9 +189,11 @@ def main_job(site):
 							except:
 								return False
 
-						if ('folder' in document):
+						elif ('folder' in document):
 							print 'Unable to download folder.'
 							return False
+						else:
+							print 'There was a problem in reading the post in %s'%course_name
 						# Adjust for now.
 						# Downloading folders is not supported yet.
 						# The 'download folder' button is a submit only form(SubmitControl).
@@ -201,5 +220,13 @@ if __name__=='__main__':
 		# print "datafile=",datafile
 
 	website=submit_form(datafile)
-
-	main_job(website)
+	# print website
+	prompt=str(raw_input("What do you want me to do ? Type 'A' for checking your courses, or 'B' for checking site news.Any other key to quit now.")).lower()
+	if(prompt=='a'):
+		user_land_soup = get_init_soup(website)
+		print "Hello %s !" % (get_name(user_land_soup))
+		print check_my_courses(website)
+	elif(prompt=='b'):
+		print check_site_news()
+	else:
+		exit()
