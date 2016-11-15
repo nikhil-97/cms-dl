@@ -3,15 +3,77 @@ import ttk
 import tkFileDialog
 import tkMessageBox
 from datetime import datetime
+import time as tm
 import cms_login as cms
 import os
 import csv
 
 class Gui:
-	data_file='CMS_username.csv'
+	data_file='.CMS_username.csv'
 	directory=None
+	activity = []
 
+	def __init__(self, master):
+		frame=Frame(root)
+		self.createGui()
 
+	def createGui(self):
+
+		root.configure(background='white')
+		self.status_text = StringVar()
+
+		settingsmenu = Menu(root, tearoff=0)
+		root.config(menu=settingsmenu)
+		root.wm_title("CMS downloader v1.0 Alpha")
+
+		submenu = Menu(settingsmenu, tearoff=0)
+		settingsmenu.add_cascade(label="Settings", menu=submenu)
+		# submenu.add_command(label="Run Now", command=self.check_courses)
+		submenu.add_command(label="Change user details", command=self.askuser)
+		# submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.askuser)
+		submenu.add_command(label="Change downloads directory", command=self.askdir)
+
+		submenu.add_separator()
+		submenu.add_command(label="Exit", command=root.destroy)
+
+		helpsubmenu = Menu(settingsmenu, tearoff=0)
+		settingsmenu.add_cascade(label="Help", menu=helpsubmenu)
+		helpsubmenu.add_command(label="Read Me", command=self.readmewindow)
+		helpsubmenu.add_separator()
+		helpsubmenu.add_command(label="Report bug", command=self.doNothing)
+		helpsubmenu.add_command(label="Contact dev", command=self.doNothing)
+
+		self.tree = ttk.Treeview(root)
+		self.tree['show'] = 'headings'
+		self.tree["columns"] = ("File Name", "Course", "Path", "Date Added", "File Size")
+		self.tree.column("File Name", width=100, stretch=True)
+		self.tree.column("Course", width=100, stretch=True)
+		self.tree.column("Path", width=100, stretch=True)
+		self.tree.column("Date Added", width=100, stretch=True)
+		self.tree.column("File Size", width=100, stretch=True)
+		self.tree.heading("File Name", text="File Name")
+		self.tree.heading("Course", text="Course")
+		self.tree.heading("Path", text="Path")
+		self.tree.heading("Date Added", text="Date Added")
+		self.tree.heading("File Size", text="File Size")
+		self.tree.insert('', 0, 'gallery',
+						 values=("File1", "MATH", "C:/", datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y'), "14.3 kB"))
+
+		self.runbutton = Button(root, text="Check my courses now", font="serif 14", bg="dodger blue", fg="white",
+								relief=FLAT, command=self.check_courses)
+		self.newsbutton = Button(root, text="Check  site  news", font="serif 14",bg="white",fg="black",relief=FLAT,command=self.check_news)
+		#self.lastbutton = Button(root, text="Show last scan results", font="serif 12",relief=FLAT,
+		#						 command=self.show_last)
+		self.progress = ttk.Progressbar(root, orient=HORIZONTAL, length=200, mode='determinate', name='run Progress')
+
+		self.statusbar = Label(root, bd=2, bg="white", relief=SUNKEN, anchor=W, font="serif 12")
+
+		self.runbutton.pack(anchor=NW, expand=True, padx=10, pady=10, ipadx=1, ipady=1)
+		self.newsbutton.pack(anchor=W, expand=True, padx=10, pady=2, ipadx=1, ipady=1)
+		#self.lastbutton.pack(anchor=W, expand=True, padx=10, pady=5, ipadx=1, ipady=1, side=TOP)
+		self.progress.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(10, 10), pady=(2, 2))
+		self.statusbar.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(10, 10), pady=(5, 5))
+		self.tree.pack(fill=BOTH, expand=True, padx=(10, 10), anchor=SW, side=BOTTOM)
 	#status_text.set(cms.status)
 
 	def doNothing(self):
@@ -38,7 +100,6 @@ class Gui:
 		return datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y')
 
 	def askuser(self):
-		print "askuser"
 		askuserwindow=Toplevel(root)
 		askuserwindow.title("Enter your CMS details")
 		askuserwindow.config(bd=2)
@@ -69,7 +130,7 @@ class Gui:
 		if self.remember.get():
 			if len(save_username)>=1 and len(save_pwd)>=1:
 				userdata = (str(save_username),str(save_pwd),str(Gui.directory))
-				with open('CMS_username.csv', 'w') as userfile:
+				with open('.CMS_username.csv', 'w') as userfile:
 					userwriter=csv.writer(userfile)
 					userwriter.writerow(userdata)
 				tkMessageBox.showinfo(title="Updated",message="Your login details have been updated with username %s"%(save_username))
@@ -81,7 +142,7 @@ class Gui:
 			with open(details_file, 'r') as reader:
 					csvreader = csv.reader(reader)
 					datafile = list(csvreader)
-			# print "datafile=",datafile
+			print "datafile=",datafile
 			return datafile
 			#userdata = datafile.read()
 			#user, pwd = map(str, userdata.split(','))
@@ -116,7 +177,7 @@ class Gui:
 	def login_to_cms(self):
 		if (not cms.init()):
 			tkMessageBox.showerror("Connection Error", "Unable to connect to CMS now. Please try again later.")
-			self.statusbar.config(bg="red",text="Cannot connect to CMS")
+			self.statusbar.config(bg="firebrick2",text="Cannot connect to CMS")
 			return False
 			# global data_file
 		self.user_details = self.load_details(Gui.data_file)
@@ -129,95 +190,48 @@ class Gui:
 				return False
 		return True
 	def check_courses(self):
+		self.progress['value']=0
+		self.progress['maximum'] = 50
 		print "Checking courses"
 		if(self.login_to_cms()):
 			user_land_soup = cms.get_init_soup(self.website)
 			print "Hello %s !" % (cms.get_name(user_land_soup))
-			self.status_text.set("Hello "+cms.get_name(user_land_soup)+" !")
-			self.statusbar.config(bg="blue",fg="white", text=cms.get_name(user_land_soup))
-			activity=cms.check_my_courses(self.website)
-			if activity:
-				print self.show_report(activity)
-				self.show_report(activity)
+			#self.status_text.set("Hello "+cms.get_name(user_land_soup)+" !")
+			self.statusbar.config(bg="white",fg="black", text='Hello'+cms.get_name(user_land_soup), font="helvetica 12")
+			root.update_idletasks()
+			course_box = cms.get_course_boxes(cms.get_init_soup(self.website))
+			for coursebox in course_box:
+				course_links = coursebox.find_all('a')
+				# Link to the course page is found.
+				# course_site_read='C:/Python27/CMS%20downloader/cms_login_dataset/Course_%20CS_ECE_EEE_INSTR%20F215%20DIGITAL%20DESIGN%20LS1.html'
+				for course in course_links:
+					coursename=cms.course_details(course)[0]
+					status = "Checking %s ......" % coursename
+					print status
+					self.statusbar.config(bg="lime green", fg="white", text=status, font="serif 10")
+					root.update_idletasks()
+					checkresult = cms.check_each_course(course)[0]
+					timestamp = cms.check_each_course(course)[1]
+					if (not checkresult):
+						status='No recent activity'
+						self.statusbar.config(bg="lime green", fg="white", text=status, font="serif 10")
+						root.update_idletasks()
+						Gui.activity.append((timestamp,coursename,'No activity'))
+					tm.sleep(1)
+					self.progress["value"] += self.progress['maximum'] // len(course_box)
+			print "Done checking"
+			self.statusbar.config(bg="lime green", fg="white", text='Done checking', font="serif 10")
+			self.progress["value"] = self.progress['maximum']
+			root.update_idletasks()
+			self.show_report(Gui.activity)
 
 	def show_last(self):
-		lastscan=Toplevel(root)
-		lastscan.minsize(width=900,height=500)
-		lastscan.title("Last Scan Results")
-		#lastscan.config(bg="white", bd=2)
-		self.scantree=ttk.Treeview(lastscan,displaycolumns='#all')
-		self.scantree['show']='headings'
-		self.scantree["columns"]=("Timestamp", "Course", "Activity")
-		self.scantree.column("Timestamp", minwidth=350, stretch=True)
-		self.scantree.column("Course", minwidth=350, stretch=True)
-		self.scantree.column("Activity", width=50, stretch=True)
-		self.scantree.heading("Timestamp", text="Timestamp")
-		self.scantree.heading("Course", text="Course")
-		self.scantree.heading("Activity", text="Activity")
-
-		if os.path.isfile('Lastactivity.csv') and os.stat('Lastactivity.csv').st_size!=0:
-			with open('Lastactivity.csv', 'r') as chandler:
+		if os.path.isfile('.Lastactivity.csv') and os.stat('.Lastactivity.csv').st_size!=0:
+			with open('.Lastactivity.csv', 'r') as chandler:
 					activityreader = csv.reader(chandler)
 					activitydata = list(activityreader)
 					# print activitydata,type(activitydata)
-					for i in activitydata:
-						# print i
-						self.scantree.insert('', 0,
-								 values=(i[0],i[1], i[2]))
-		self.scantree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20))
-
-	def __init__(self, master):
-		frame=Frame(root)
-		settingsmenu = Menu(root, tearoff=0)
-		root.config(menu = settingsmenu)
-		root.wm_title("CMS downloader v1.0 Alpha")
-
-		submenu = Menu(settingsmenu, tearoff=0)
-		settingsmenu.add_cascade(label="Settings", menu=submenu)
-		# submenu.add_command(label="Run Now", command=self.check_courses)
-		submenu.add_command(label="Change user details", command=self.askuser)
-		#submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.askuser)
-		submenu.add_command(label="Change downloads directory", command=self.askdir)
-
-		submenu.add_separator()
-		submenu.add_command(label="Exit", command=root.destroy)
-
-		helpsubmenu=Menu(settingsmenu, tearoff=0)
-		settingsmenu.add_cascade(label="Help", menu=helpsubmenu)
-		helpsubmenu.add_command(label="Read Me", command=self.readmewindow)
-		helpsubmenu.add_separator()
-		helpsubmenu.add_command(label="Report bug", command=self.doNothing)
-		helpsubmenu.add_command(label="Contact dev", command=self.doNothing)
-
-		self.tree=ttk.Treeview(master)
-		self.tree['show']='headings'
-		self.tree["columns"]=("File Name", "Course", "Path", "Date Added", "File Size")
-		self.tree.column("File Name", width=100, stretch=True)
-		self.tree.column("Course", width=100, stretch=True)
-		self.tree.column("Path", width=100, stretch=True)
-		self.tree.column("Date Added", width=100, stretch=True)
-		self.tree.column("File Size", width=100, stretch=True)
-		self.tree.heading("File Name", text="File Name")
-		self.tree.heading("Course", text="Course")
-		self.tree.heading("Path", text="Path")
-		self.tree.heading("Date Added", text="Date Added")
-		self.tree.heading("File Size", text="File Size")
-		self.tree.insert('', 0, 'gallery',
-						 values=("File1", "MATH", "C:/", datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y'), "14.3 kB"))
-
-		self.runbutton=Button(master, text="Check my courses now", font="serif 18",bg="green",fg="black", relief=RAISED,command=self.check_courses)
-		self.newsbutton=Button(master,text="Check site news",font="serif 14",relief=RAISED,command=self.check_news)
-		self.lastbutton=Button(master, text="Show last scan results", font="serif 12", relief=RAISED,command=self.show_last)
-		#self.progress = ttk.Progressbar(master, mode='indeterminate', name='run Progress')
-		self.status_text = StringVar()
-		self.statusbar=Label(master, bd=2,bg="white", relief=SUNKEN, anchor=W, font="serif 14",textvariable=self.status_text)
-
-		self.runbutton.pack(anchor=NW, expand=True, padx=20,pady=5, ipadx=1, ipady=1)
-		self.newsbutton.pack(anchor=W, expand=True, padx=20,pady=5,ipadx=1, ipady=1)
-		self.lastbutton.pack(anchor=W,expand=True,padx=20,pady=5,ipadx=1,ipady=1,side=TOP)
-		#self.progress.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
-		self.statusbar.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(2, 2), pady=(2, 2))
-		self.tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20), anchor=SW, side=BOTTOM)
+		self.show_report(activitydata)
 
 
 root=Tk()
