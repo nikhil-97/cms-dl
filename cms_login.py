@@ -9,15 +9,27 @@ import os
 from sys import setrecursionlimit
 import time as tm
 import csv
-
+from datetime import datetime
 import mechanize
 from bs4 import BeautifulSoup
-
-from site_test import site_check
+from requests import get,ConnectionError,HTTPError
 
 br = None
 setrecursionlimit(50000)
-status="Idle"
+
+timestamp=None
+
+def site_check(url):
+    try:
+        response=get(url,timeout=10)
+        if(int(response.status_code)==200):
+            return True
+    except ((ConnectionError) or (HTTPError)):
+        return False
+
+
+def nowtime():
+	return datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y')
 
 def init():
 	global br
@@ -32,9 +44,6 @@ def init():
 		br.set_cookiejar(cj)
 		br.open(cms_general)
 		return True
-
-
-# Fill login form.Login details stored in CMS_userdata.dat
 
 
 def submit_form(details):
@@ -96,7 +105,6 @@ def check_site_news():
 			latest_news.append(news_name.a.string)
 		except:
 			continue
-	#print latest_news
 	return 'job done'
 
 def course_details(course):
@@ -112,107 +120,135 @@ def course_activity_block(coursesite):
 	activity_block = course_soup.body.find('div', attrs={'class': 'block_recent_activity  block'})
 	return activity_block
 
-def write_forum(document):
+def write_forum(file_name,document,path):
+	#print "in write_forum(%s,%s,%s)"%(file_name,document,path)
 	forum_post = br.open(document).read()
 	postsoup = BeautifulSoup(forum_post, 'html.parser')
 	post = postsoup.body.find('div', attrs={'role': 'main'})
-	text_to_write = ' '.join(post.text.split('(')[:-1])
+	text_to_write=post.text
+	#text_to_write = ' '.join(post.text.split('(')[:-1])
 	# this is to take care of
 	# '(There are no discussion topics yet in this forum)' text.
 	# This may give some issues in some cases.Have to find another way maybe.
-	post_read_error_flag = 1
 	if (text_to_write == ''):
-		print 'There was an error reading the forum post. Please check manually.' + 'Sorry :( '
-
-		post_read_error_flag = 0
-
+		#print 'There was an error reading the forum post. Please check manually.' + 'Sorry :( '
+		return False
 	save_post_with_name = file_name + '.txt'
 
-	if (os.path.isfile(dwl_path + save_post_with_name) and os.stat(
-				dwl_path + save_filename).st_size != 0 and post_read_error_flag):
-		print 'File %s already exists at %s' % (save_post_with_name, dwl_path)
+	if (os.path.isfile(path + save_post_with_name) and os.stat(
+				path + save_post_with_name).st_size != 0):
+		forum_exists=True
+		return (True, forum_exists)
 	else:
-		if (post_read_error_flag):
-			with open(dwl_path + save_post_with_name, 'w') as g:
+		forum_exists=False
+		try:
+			with open(path + save_post_with_name, 'w') as g:
 				g.write(text_to_write)
-				# print 'Forum post written to %s at %s' % (save_post_with_name, dwl_path)
-				activity_indicator = 'Forum post written to %s at %s' % (
-					save_post_with_name, dwl_path),
+			return (True,forum_exists)
+		except:
+			return False
 
 def dwld_file(file_name,document,dwl_path):
-
-	br.open(document)
-
 	save_filename = file_name + '.' + document.split('.')[-1]
-	#activity_indicator = 'Downloaded file %s' % save_filename,
-
+	exists=False
 	if os.path.isfile(dwl_path + save_filename) and os.stat(dwl_path + save_filename).st_size != 0:
-		print 'File %s already exists at %s' % (save_filename, dwl_path)
+		exists=True
+		return (True,exists)
 	else:
 		try:
+			br.open(document)
 			br.retrieve(document, dwl_path + save_filename)
 			tm.sleep(3)
 			# This downloads the file to dwl_path.
-			print '%s downloaded' % save_filename
-			return True
+			return (True,exists)
 		except:
 			return False
 
 
 def check_each_course(course):
+	global timestamp
+	coursename = course_details(course)[0]
 	coursesite = course_details(course)[1]
+	#coursesite='file:///C:/Python27/CMS%20downloader/cms_login_dataset/Course_%20CS_ECE_EEE_INSTR%20F215%20DIGITAL%20DESIGN%20LS1.html'
 	course_activity=course_activity_block(coursesite)
 	time = course_activity.find('div', attrs={'class': 'activityhead'})
 	timestamp = time.string
 	try:
-		if course_activity.p.string == 'No recent activity':
-			new_activity_indicator = False
-			return (new_activity_indicator,timestamp)
+		recentactivity=course_activity.p.string
+	except AttributeError:
+		recentactivity=course_activity.li.text
+	print recentactivity,(recentactivity=='No recent activity')
 
-		else:
-			new_files = course_activity.find_all("p", "activity")
-			dwl_path = 'C:\\Users\\Nikhilanj\\Desktop\\'
-			for new_file in new_files:
-				try:
-					file_name = file.a.string
-					dwldfile = file.a.get('href')
-				except AttributeError:
-					return False
-				print file_name
+	if recentactivity == 'No recent activity':
+		new_activity_indicator = 0
+		return new_activity_indicator
 
+	else:
+		new_files = course_activity.find_all("p", "activity")
+		dwl_path = 'C:\\Users\\Nikhilanj\\Desktop\\'
+
+
+		for new_file in new_files:
+			try:
+				file_name = new_file.a.string
+				dwldfile1 = new_file.a.get('href')
+			except AttributeError:
+				continue
+			if('cms.bits-hyderabad.ac.in'in dwldfile1):
+				dwldfile=dwldfile1.replace('cms.bits-hyderabad.ac.in','id.bits-hyderabad.ac.in')
+			else:
+				dwldfile=dwldfile1
+			try:
 				br.open(dwldfile)
-				# In most cases,this directs to a document file.Tested on .pdf,.docx ,the most common formats.
-				document = br.geturl()
-				try:
-					dwld_file(file_name,document,dwl_path)
-				except:
-					if ('forum' in document):
-						try:
-							write_forum(document)
-						except:
-							print'Error'
+			except :
+				continue
 
-					elif ('folder' in document):
-						print 'Unable to download folder.'
-						return
+			# In most cases,this directs to a document file.Tested on .pdf,.docx ,the most common formats.
+			document = br.geturl()
+			try:
+				dwld_result=dwld_file(file_name, document, dwl_path)
+				if (dwld_result):
+					new_activity_indicator = 1
+					if(not dwld_result[1]):
+						print "File `%s` downloaded to %s"%(file_name,dwl_path)
+						dwdata=(file_name,coursename,dwl_path,nowtime())
+						with open('.cms-dl_downloads.csv', 'a') as dwlist_file:
+							dwlwriter = csv.writer(dwlist_file)
+							dwlwriter.writerow(dwdata)
 					else:
-						print 'There was a problem in reading the post in %s' % course_name
-					# Adjust for now.
+						print "File `%s` already exists at %s"%(file_name,dwl_path)
+					continue
+				else:
+					print 'Unable to download file `%s` from _%s_' % (file_name, document)
+
+						#return (False, timestamp)
+			except :
+				if ('/forum/' in document):
+					# try:
+					forumstatus=write_forum(file_name,document,dwl_path)
+					if(forumstatus):
+						if(not forumstatus[1]):
+							print 'Forum `%s` written to %s'%(file_name,dwl_path)
+							dwdata = (file_name, coursename, dwl_path, nowtime())
+							with open('.cms-dl_downloads.csv', 'a') as dwlist_file:
+								dwlwriter = csv.writer(dwlist_file)
+								dwlwriter.writerow(dwdata)
+					# except:
+					# 	print'Error'
+
+				elif ('folder' in document):
+					print 'Unable to download folder.'
+					#return
+				else:
+					print 'There was a problem in reading the post in %s' % coursename
+				# Adjust for now.
 					# Downloading folders is not supported yet.
 					# The 'download folder' button is a submit only form(SubmitControl).
 					# Unable to submit it for some reason.
-	except:
-		pass
+				# except AttributeError:
+				# 	print 'AttributeError'
+					# 	return False
 
-	# activity_list.append((str(timestamp).strip('\n'), str(course_name).strip('\n'), str(activity_indicator).strip('\n')))
-	# # print activity_list
-	# # print str(course_name)
-	# # print str(activity_indicator)
-	# tm.sleep(1)
-	# # print activity_list
-	#
-	# write_activity_to_file(activity_list)
-	# return activity_list
 
 if __name__=='__main__':
 	activity_list = []
@@ -231,27 +267,27 @@ if __name__=='__main__':
 				datafile = list(csvreader)
 		# print "datafile=",datafile
 	website=submit_form(datafile)
+	user_land_soup = get_init_soup(website)
+	print "Hello %s !" % (get_name(user_land_soup))
 	# print website
 	prompt=str(raw_input("What do you want me to do ? Type 'A' for checking your courses, or 'B' for checking site news.Any other key to quit now.")).lower()
 	if(prompt=='a'):
-		user_land_soup = get_init_soup(website)
-		print "Hello %s !" % (get_name(user_land_soup))
-		course_box = get_course_boxes(get_init_soup(website))
+		course_box = get_course_boxes(user_land_soup)
 		#print check_my_courses(website)
 		for coursebox in course_box:
 			course_links = coursebox.find_all('a')
 			# Link to the course page is found.
-			# course_site_read='C:/Python27/CMS%20downloader/cms_login_dataset/Course_%20CS_ECE_EEE_INSTR%20F215%20DIGITAL%20DESIGN%20LS1.html'
 			for course in course_links:
 				status = "Checking %s ......" % course_details(course)[0]
 				print status
 				checkresult=check_each_course(course)
-				timestamp=checkresult[1]
-				if(not checkresult[0]):
+				#timestamp=checkresult[1]
+				print checkresult
+				if(not checkresult and checkresult != None):
 					print 'No recent %s here\n' % (timestamp[:1].lower() + timestamp[1:])
-					activity_list.append('No activity')
+					activity_list.append((course_details(course)[0],'No activity'))
 				tm.sleep(1)
-		print activity_list
+		print ['%s -- %s'%(i[0],i[1]) for i in activity_list ]
 	elif(prompt=='b'):
 		print check_site_news()
 	else:

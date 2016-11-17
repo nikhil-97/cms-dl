@@ -29,8 +29,8 @@ class Gui:
 		submenu = Menu(settingsmenu, tearoff=0)
 		settingsmenu.add_cascade(label="Settings", menu=submenu)
 		# submenu.add_command(label="Run Now", command=self.check_courses)
-		submenu.add_command(label="Change user details", command=self.askuser)
-		# submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.askuser)
+		submenu.add_command(label="Add/Remove users", command=self.userconsole)
+		# submenu.add_command(label="Log in as different user (Currently %s )"%(self.load_details(Gui.data_file).keys()[0]), command=self.userconsole)
 		submenu.add_command(label="Change downloads directory", command=self.askdir)
 
 		submenu.add_separator()
@@ -43,38 +43,45 @@ class Gui:
 		helpsubmenu.add_command(label="Report bug", command=self.doNothing)
 		helpsubmenu.add_command(label="Contact dev", command=self.doNothing)
 
+		self.runbutton = Button(root, text="Check my courses now", font="serif 14", bg="dodger blue", fg="white",
+								relief=FLAT, command=self.check_courses)
+
+		self.newsbutton = Button(root, text="Check  site  news", font="serif 14", bg="white", fg="black", relief=FLAT,
+								 command=self.check_news)
+
 		self.tree = ttk.Treeview(root)
 		self.tree['show'] = 'headings'
-		self.tree["columns"] = ("File Name", "Course", "Path", "Date Added", "File Size")
-		self.tree.column("File Name", width=100, stretch=True)
-		self.tree.column("Course", width=100, stretch=True)
-		self.tree.column("Path", width=100, stretch=True)
-		self.tree.column("Date Added", width=100, stretch=True)
-		self.tree.column("File Size", width=100, stretch=True)
+		self.tree["columns"] = ("File Name", "Course", "Path", "Date Added")
+		self.tree.column("File Name", width=250, stretch=True)
+		self.tree.column("Course", width=250, stretch=True)
+		self.tree.column("Path", width=200, stretch=True)
+		self.tree.column("Date Added", width=150, stretch=True)
 		self.tree.heading("File Name", text="File Name")
 		self.tree.heading("Course", text="Course")
 		self.tree.heading("Path", text="Path")
 		self.tree.heading("Date Added", text="Date Added")
-		self.tree.heading("File Size", text="File Size")
-		self.tree.insert('', 0, 'gallery',
-						 values=("File1", "MATH", "C:/", datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y'), "14.3 kB"))
+		dwld_data=[]
+		if os.path.isfile('.cms-dl_downloads.csv') and os.stat('.cms-dl_downloads.csv').st_size!=0:
+			with open('.cms-dl_downloads.csv', 'r') as dwlfile:
+					dwldreader = csv.reader(dwlfile)
+					dwld_data = list(dwldreader)
+		print dwld_data
+		if(len(dwld_data)>0):
+			for dwlds in dwld_data:
+				self.tree.insert('', 'end',values=(dwlds[0],dwlds[1], dwlds[2],dwlds[3]))
 
-		self.runbutton = Button(root, text="Check my courses now", font="serif 14", bg="dodger blue", fg="white",
-								relief=FLAT, command=self.check_courses)
-		self.newsbutton = Button(root, text="Check  site  news", font="serif 14",bg="white",fg="black",relief=FLAT,command=self.check_news)
-		#self.lastbutton = Button(root, text="Show last scan results", font="serif 12",relief=FLAT,
-		#						 command=self.show_last)
-		self.progress = ttk.Progressbar(root, orient=HORIZONTAL, length=200, mode='determinate', name='run Progress')
 
-		self.statusbar = Label(root, bd=2, bg="white", relief=SUNKEN, anchor=W, font="serif 12")
+		# self.lastbutton = Button(root, text="Show last scan results", font="serif 12",relief=FLAT,
+		# 						 command=self.show_last)
+		self.progress = ttk.Progressbar(root, orient=HORIZONTAL, length=200, mode='determinate')
 
-		self.runbutton.pack(anchor=NW, expand=True, padx=10, pady=10, ipadx=1, ipady=1)
-		self.newsbutton.pack(anchor=W, expand=True, padx=10, pady=2, ipadx=1, ipady=1)
-		#self.lastbutton.pack(anchor=W, expand=True, padx=10, pady=5, ipadx=1, ipady=1, side=TOP)
-		self.progress.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(10, 10), pady=(2, 2))
-		self.statusbar.pack(side=BOTTOM, fill=X, expand=True, anchor=SE, padx=(10, 10), pady=(5, 5))
+		self.statusbar = Label(root, bd=2, bg="white", relief=SUNKEN, font="serif 12")
+
+		self.runbutton.pack(anchor=NW, expand=True,fill=Y, padx=10, pady=10, ipadx=1, ipady=1)
+		self.newsbutton.pack(anchor=W, expand=True,fill=Y, padx=10, pady=2, ipadx=1, ipady=1)
+		self.progress.pack(side=BOTTOM, anchor=SE, expand=True, fill=BOTH, padx=(10, 10), pady=(5, 5))
+		self.statusbar.pack(side=BOTTOM, anchor=SE, expand=True, fill=BOTH, padx=(10, 10), pady=(5, 5))
 		self.tree.pack(fill=BOTH, expand=True, padx=(10, 10), anchor=SW, side=BOTTOM)
-	#status_text.set(cms.status)
 
 	def doNothing(self):
 		pass
@@ -99,57 +106,66 @@ class Gui:
 	def nowtime(self):
 		return datetime.now().strftime('%I:%M:%S %p,%d/%m/%Y')
 
-	def askuser(self):
-		askuserwindow=Toplevel(root)
-		askuserwindow.title("Enter your CMS details")
-		askuserwindow.config(bd=2)
-		userlabel=Label(askuserwindow, text="Username:", font="serif 14")
+	def userconsole(self):
+		userconsolewindow=Toplevel(root)
+		userconsolewindow.title("Add/Remove Users")
+		userconsolewindow.config(bd=2)
+		userdata=self.load_details(Gui.data_file)
+		addusertext='Add User'
+		if(not userdata):
+			self.newlabel = Label(userconsolewindow, bd=2, relief=FLAT, text="Hi ! Looks like you're new here.\n Add a user below to start.",font="helvetica 12").grid(column=0,columnspan=5,row=1, padx=(5,5),pady=10)
+		else:
+			Label(userconsolewindow, bd=2, relief=FLAT,
+				  text="Choose a user :", font="helvetica 12").grid(
+				column=0, columnspan=5, row=0, padx=(5, 5), pady=5)
+			for user in userdata:
+				Button(userconsolewindow, text=user[0], relief=RAISED,font="serif 12",command=self.doNothing).grid(column=2,row=1,ipadx=3,ipady=1,padx=5,pady=10)
+				addusertext = 'Add another user'
+		addusers=Button(userconsolewindow, text=addusertext, relief=RAISED,bg="lime green",fg="white", font="serif 14", command=self.adduser)
+		addusers.grid(column=2,row=3,padx=10,pady=10)
+
+	def adduser(self):
+
+		adduserwindow = Toplevel(root)
+		adduserwindow.title("Add User")
+
+		userlabel=Label(adduserwindow, text="CMS Username", font="serif 12")
 		self.username=StringVar()
 		self.password=StringVar()
-		userentry=Entry(askuserwindow, relief=SUNKEN, bg="white",textvariable=self.username)
-		pwdlabel=Label(askuserwindow, text="Password:", font="serif 14")
-		pwdentry=Entry(askuserwindow, relief=SUNKEN, bg="white", show="*",textvariable=self.password)
-		self.remember=BooleanVar()
-		ask_to_remember=Checkbutton(askuserwindow, text="Remember details", font="serif 14", variable=self.remember)
-		confirmbut=Button(askuserwindow, text="Confirm", relief=RAISED,bg="blue",fg="white", font="serif 14", command=self.save_details)
+		userentry=Entry(adduserwindow, relief=SUNKEN, bg="white",font="serif 12",textvariable=self.username)
+		pwdlabel=Label(adduserwindow, text="CMS Password", font="serif 12")
+		pwdentry=Entry(adduserwindow, relief=SUNKEN, bg="white", show="*",font="serif 12",textvariable=self.password)
+		addbut=Button(adduserwindow, text="Add User", relief=RAISED,bg="lime green",fg="white", font="serif 14", command=self.save_details)
 
-		userlabel.pack(fill=BOTH, expand=True, anchor=NW, padx=2)
-		userentry.pack(fill=BOTH, anchor=NE, padx=2)
-		pwdlabel.pack(fill=BOTH, expand=True, anchor=SW, padx=2)
-		pwdentry.pack(fill=BOTH, anchor=SE, padx=2)
-		ask_to_remember.pack()
-		confirmbut.pack(expand=True, anchor=S, padx=20, pady=2)
+		userlabel.grid(column=0,row=0,padx=10,pady=10)
+		userentry.grid(column=1,columnspan=3, row=0,ipadx=3,ipady=1,padx=(10,10),pady=(10,10))
+		pwdlabel.grid(column=0,row=1,padx=10,pady=5)
+		pwdentry.grid(column=1,columnspan=3,row=1,ipadx=3,ipady=1,padx=(10,10),pady=(10,10))
+		addbut.grid(column=1,row=2,pady=10)
 
 		return (self.username, self.password)
 
 	def save_details(self):
 		save_username=self.username.get()
 		save_pwd=self.password.get()
-		#self.directory_var=StringVar(root)
-		self.click_count=IntVar(root)
-		if self.remember.get():
-			if len(save_username)>=1 and len(save_pwd)>=1:
-				userdata = (str(save_username),str(save_pwd),str(Gui.directory))
-				with open('.CMS_username.csv', 'w') as userfile:
-					userwriter=csv.writer(userfile)
-					userwriter.writerow(userdata)
-				tkMessageBox.showinfo(title="Updated",message="Your login details have been updated with username %s"%(save_username))
-			else:
-				tkMessageBox.showerror("Error","You can't have an empty username/password -_- ")
+		if len(save_username)>=1 and len(save_pwd)>=1:
+			userdata = (str(save_username),str(save_pwd),str(Gui.directory))
+			with open('.CMS_username.csv', 'a') as userfile:
+				userwriter=csv.writer(userfile)
+				userwriter.writerow(userdata)
+			tkMessageBox.showinfo(title="Added",message="User %s has been added "%(save_username))
+		else:
+			tkMessageBox.showerror("Error","You can't have an empty username/password -_- ")
 
 	def load_details(self,details_file):
 		if os.path.isfile(details_file) and os.stat(details_file).st_size != 0:
 			with open(details_file, 'r') as reader:
 					csvreader = csv.reader(reader)
 					datafile = list(csvreader)
-			print "datafile=",datafile
+			#print "datafile=",datafile
 			return datafile
-			#userdata = datafile.read()
-			#user, pwd = map(str, userdata.split(','))
-			#datafile.close()
 		else:
-			self.askuser()
-			# self.askdir()
+			return False
 		# Include option to overwrite,login as different user.
 		# May have to change data storage type to recognise different users.
 		# return (user, pwd)
@@ -165,7 +181,10 @@ class Gui:
 		self.report_tree.heading("Activity", text="Activity")
 		for i in list:
 			self.report_tree.insert('', 'end',values=(i[1], i[2]))
-		self.report_tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20))
+
+		self.ok=Button(self.report, text="  OK  ", font="helvetica 12", fg="black", relief=RAISED,command=self.report.destroy)
+		self.report_tree.pack(fill=BOTH, expand=True, padx=(20, 20), pady=(20, 20),side=TOP)
+		self.ok.pack(expand=False,padx=20,pady=10,anchor=SE,side=BOTTOM)
 
 	def check_news(self):
 		if (not cms.init()):
@@ -177,9 +196,10 @@ class Gui:
 	def login_to_cms(self):
 		if (not cms.init()):
 			tkMessageBox.showerror("Connection Error", "Unable to connect to CMS now. Please try again later.")
-			self.statusbar.config(bg="firebrick2",text="Cannot connect to CMS")
+			self.statusbar.config(bg="firebrick2",text="  Cannot connect to CMS  ")
 			return False
 			# global data_file
+		
 		self.user_details = self.load_details(Gui.data_file)
 		# print user_details
 		if (self.user_details != None):
@@ -191,7 +211,7 @@ class Gui:
 		return True
 	def check_courses(self):
 		self.progress['value']=0
-		self.progress['maximum'] = 50
+		self.progress['maximum'] = 100
 		print "Checking courses"
 		if(self.login_to_cms()):
 			user_land_soup = cms.get_init_soup(self.website)
@@ -208,15 +228,15 @@ class Gui:
 					coursename=cms.course_details(course)[0]
 					status = "Checking %s ......" % coursename
 					print status
-					self.statusbar.config(bg="lime green", fg="white", text=status, font="serif 10")
+					self.statusbar.config(bg="goldenrod1", fg="brown", text=status, font="serif 12")
 					root.update_idletasks()
-					checkresult = cms.check_each_course(course)[0]
-					timestamp = cms.check_each_course(course)[1]
+					checkresult = cms.check_each_course(course)
+					guitimestamp = cms.timestamp
 					if (not checkresult):
 						status='No recent activity'
-						self.statusbar.config(bg="lime green", fg="white", text=status, font="serif 10")
+						self.statusbar.config(bg="lime green", fg="white", text=status, font="serif 12")
 						root.update_idletasks()
-						Gui.activity.append((timestamp,coursename,'No activity'))
+						Gui.activity.append((guitimestamp,coursename,'No activity'))
 					tm.sleep(1)
 					self.progress["value"] += self.progress['maximum'] // len(course_box)
 			print "Done checking"
