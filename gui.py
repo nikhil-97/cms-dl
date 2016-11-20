@@ -58,17 +58,21 @@ class Gui:
 		self.tree.column("Date Added", width=150, stretch=True)
 		self.tree.heading("File Name", text="File Name")
 		self.tree.heading("Course", text="Course")
-		self.tree.heading("Path", text="Path downloaded to")
+		self.tree.heading("Path", text="Path")
 		self.tree.heading("Date Added", text="Date Added")
 		dwld_data=[]
 		if os.path.isfile('.cms-dl_downloads.csv') and os.stat('.cms-dl_downloads.csv').st_size!=0:
 			with open('.cms-dl_downloads.csv', 'r') as dwlfile:
 					dwldreader = csv.reader(dwlfile)
 					dwld_data = list(dwldreader)
+		print dwld_data
 		if(len(dwld_data)>0):
 			for dwlds in dwld_data:
 				self.tree.insert('', 'end',values=(dwlds[0],dwlds[1], dwlds[2],dwlds[3]))
 
+
+		# self.lastbutton = Button(root, text="Show last scan results", font="serif 12",relief=FLAT,
+		# 						 command=self.show_last)
 		self.progress = ttk.Progressbar(root, orient=HORIZONTAL, length=200, mode='determinate')
 
 		self.statusbar = Label(root, bd=2, bg="white", relief=SUNKEN, font="serif 12")
@@ -107,7 +111,6 @@ class Gui:
 		userconsolewindow.title("Add/Remove Users")
 		userconsolewindow.config(bd=2)
 		userdata=self.load_details(Gui.data_file)
-		print userdata
 		addusertext='Add User'
 		if(not userdata):
 			self.newlabel = Label(userconsolewindow, bd=2, relief=FLAT, text="Hi ! Looks like you're new here.\n Add a user below to start.",font="helvetica 12").grid(column=0,columnspan=5,row=1, padx=(5,5),pady=10)
@@ -115,13 +118,11 @@ class Gui:
 			Label(userconsolewindow, bd=2, relief=FLAT,
 				  text="Choose a user :", font="helvetica 12").grid(
 				column=0, columnspan=5, row=0, padx=(5, 5), pady=5)
-			rownum=0
 			for user in userdata:
-				rownum+=1
-				Button(userconsolewindow, text=user[0], relief=RAISED,font="serif 12",command=self.doNothing).grid(column=2,row=rownum,ipadx=3,ipady=1,padx=5,pady=10)
+				Button(userconsolewindow, text=user[0], relief=RAISED,font="serif 12",command=self.doNothing).grid(column=2,row=1,ipadx=3,ipady=1,padx=5,pady=10)
 				addusertext = 'Add another user'
 		addusers=Button(userconsolewindow, text=addusertext, relief=RAISED,bg="lime green",fg="white", font="serif 14", command=self.adduser)
-		addusers.grid(column=2,row=rownum+1,padx=10,pady=10)
+		addusers.grid(column=2,row=3,padx=10,pady=10)
 
 	def adduser(self):
 
